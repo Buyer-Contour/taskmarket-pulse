@@ -42,7 +42,7 @@
       <noscript><p class="notice">Enable JavaScript to explore this dashboard. The methods and data sources are listed below.</p></noscript>
       <div id="dashboard" hidden>
         <section id="headline" class="cards" aria-label="Headline numbers"></section>
-        <section class="section" aria-labelledby="trends-title">
+        <section class="section" id="trends" aria-labelledby="trends-title">
           <div class="section-head">
             <div><div class="eyebrow">01 · FLOW</div><h2 id="trends-title">Market trends</h2><p id="series-scope"></p></div>
             <div class="switch" role="group" aria-label="Time range">
@@ -50,9 +50,15 @@
             </div>
           </div>
           <div id="charts" class="charts"></div>
+          <a class="view-link" data-view="trends" href="?view=trends#trends">Share this trends view ↗</a>
         </section>
-        <section class="section" aria-labelledby="participation-title">
+        <section class="section" id="participation" aria-labelledby="participation-title">
           <div class="section-head"><div><div class="eyebrow">02 · PARTICIPATION</div><h2 id="participation-title">Who posts work?</h2><p>Distinct requester addresses by UTC week. The current week is partial.</p></div></div>
+          <article class="panel rotation" aria-labelledby="rotation-title">
+            <div class="posters-title"><div><span class="eyebrow">DEMAND MIX</span><h3 id="rotation-title">Does demand come from repeat posters?</h3></div><label for="posting-week">UTC week <select id="posting-week"></select></label></div>
+            <div id="rotation-content" aria-live="polite"></div>
+            <div class="view-actions"><a class="view-link" href="#" id="posting-csv" download>Download weekly values (CSV)</a><a class="view-link" data-view="participation" href="?view=participation#participation">Share this participation view ↗</a></div>
+          </article>
           <div id="posters" class="panel"></div>
           <div class="breakdowns">
             <div class="panel"><h3>Tasks by mode</h3><div id="modes"></div></div>
@@ -60,10 +66,11 @@
           </div>
           <p id="breakdown-scope" class="muted caption"></p>
         </section>
-        <section class="section" aria-labelledby="activity-title">
+        <section class="section" id="activity" aria-labelledby="activity-title">
           <div class="section-head"><div><div class="eyebrow">03 · ACTIVITY</div><h2 id="activity-title">When the market moves</h2><p id="heat-scope"></p></div></div>
           <div class="panel"><h3>Activity by hour</h3><div id="heat"></div></div>
           <div class="panel feed-panel"><h3>Latest events <span class="signal"></span></h3><div id="feed"></div></div>
+          <a class="view-link" data-view="activity" href="?view=activity#activity">Share this activity view ↗</a>
         </section>
       </div>
       <details id="methods" class="section methods" open>
@@ -75,7 +82,7 @@
           <li><code>/api/stats/breakdowns</code> — task totals by mode and status as returned.</li>
           <li><code>/api/stats/activity-heatmap</code> — trailing 30 days, <code>hourOfWeek</code>, UTC. Cells show activity counts.</li>
           <li><code>/api/stats/activity-feed</code> — the API returns both chains; filter by each event’s actual <code>chainId</code>. Up to six pages of 50 events are read; up to twelve per chain are shown with shortened public task IDs.</li>
-          <li><code>/api/tasks</code> — newest first, 100 per page, all statuses. Follow cursors until the start of the oldest displayed week or the end of the list. Dedupe by task ID and count distinct case-folded requester addresses per Monday-starting UTC week. No addresses or identities are displayed. An incomplete scan is never published.</li>
+          <li><code>/api/tasks</code> — newest first, 100 per page, all statuses. Follow cursors until the start of the oldest displayed week or the end of the list. Dedupe by task ID and count distinct case-folded requester addresses per Monday-starting UTC week. Demand mix groups tasks by whether their requester posted once or multiple times that week; tasks with no valid requester are shown separately. The denominator is every task in the week. This measures posting frequency, not whether a requester is new to the market. No addresses or identities are displayed. An incomplete scan is never published.</li>
         </ul>
         <p>Source: <a href="https://api.taskmarket.dev/">api.taskmarket.dev</a>. Server refreshes every 5 minutes on Locus or every 15 minutes on Cloudflare; cached for at least 60 seconds. Failed refreshes retain the last complete snapshot.</p>
       </details>

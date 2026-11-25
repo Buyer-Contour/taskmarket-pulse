@@ -1,5 +1,6 @@
 import {WorkflowEntrypoint} from 'cloudflare:workers';
 import {collectSnapshot} from './data.mjs';
+import {shareView} from '../public/participation.js';
 
 const key = 'pulse-v1';
 
@@ -22,11 +23,19 @@ export default {
     }
     const response = await env.ASSETS.fetch(request);
     if (url.pathname !== '/') return response;
-    return new HTMLRewriter()
+    const view = shareView(url.searchParams.get('view'));
+    const rewriter = new HTMLRewriter()
       .on('meta[property="og:image"], meta[name="twitter:image"]', {
-        element(el) { el.setAttribute('content', new URL('/share.png', url).href); },
-      })
-      .transform(response);
+        element(el) { el.setAttribute('content', new URL(view?.[2] ?? '/share.png', url).href); },
+      });
+    if (view) {
+      rewriter.on('meta[property="og:title"], meta[name="twitter:title"]', {
+        element(el) { el.setAttribute('content', `${view[0]} · Taskmarket Pulse`); },
+      }).on('meta[property="og:description"], meta[name="twitter:description"]', {
+        element(el) { el.setAttribute('content', view[1]); },
+      });
+    }
+    return rewriter.transform(response);
   },
   async scheduled(_event, env) {
     await env.REFRESH.create();

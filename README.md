@@ -4,6 +4,8 @@ A read-only Taskmarket dashboard by BuyerContour. Explore Tempo (4217) and Base 
 
 [Live dashboard](https://svc-mwvp1gd19orapjou.buildwithlocus.com/) · [Public source repository](https://github.com/Buyer-Contour/taskmarket-pulse)
 
+The [weekly demand mix](https://svc-mwvp1gd19orapjou.buildwithlocus.com/?view=participation#participation) compares a selected UTC week with the preceding week and offers a per-chain CSV of the underlying counts. The share links preserve the chain, date range, and selected week where relevant. Trends, participation and activity have their own social preview images; regenerate those PNGs with `python3 scripts/share-cards.py` if the section names change (requires Pillow).
+
 ## Run locally
 
 Node.js 22+ and npm are required. No upstream key or Cloudflare account is needed for local development.

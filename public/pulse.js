@@ -1,3 +1,5 @@
+import {postingCsv, postingMix, shareView} from './participation.js';
+
 const $ = selector => document.querySelector(selector);
 const format = new Intl.NumberFormat('en');
 const numberWithDecimals = new Intl.NumberFormat('en', {maximumFractionDigits: 6});
@@ -18,6 +20,8 @@ const days = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 const initial = new URLSearchParams(location.search);
 let snapshot, net = initial.get('net') === 'base' ? 'base' : 'tempo';
 let range = ['7', '90', 'all'].includes(initial.get('range')) ? initial.get('range') : '30';
+let week = initial.get('week');
+const initialView = shareView(initial.get('view')) ? initial.get('view') : null;
 
 function setControls(selector, key, value) {
   document.querySelectorAll(selector).forEach(button => button.setAttribute('aria-pressed', button.dataset[key] === value));
@@ -25,8 +29,16 @@ function setControls(selector, key, value) {
 
 function updateLink() {
   const url = new URL(location.href);
-  url.search = new URLSearchParams({net, range});
+  url.searchParams.set('net', net);
+  url.searchParams.set('range', range);
+  if (week) url.searchParams.set('week', week);
   history.replaceState(null, '', url);
+  document.querySelectorAll('[data-view]').forEach(link => {
+    const view = link.dataset.view;
+    const params = new URLSearchParams({net, range, view});
+    if (view === 'participation' && week) params.set('week', week);
+    link.href = `?${params}#${view}`;
+  });
 }
 
 function plot(rows, key, name, unit) {
@@ -59,6 +71,33 @@ function bars(rows) {
   return rows.length ? `<ul class="bars">${rows.map(row => `<li><span>${pretty(row.key)}</span><meter aria-label="${pretty(row.key)}" min="0" max="${max}" value="${row.count}"></meter><strong>${numeric(row.count)}</strong></li>`).join('')}</ul>` : '<p>No counts returned.</p>';
 }
 
+function renderRotation() {
+  const rows = snapshot.networks[net].posters;
+  const selected = rows.find(row => row.week === week) ?? rows.findLast(row => !row.partial);
+  const comparison = rows[rows.indexOf(selected) - 1];
+  const fmt = new Intl.NumberFormat('en', {style: 'percent', maximumFractionDigits: 1});
+  const pct = row => row.tasks ? fmt.format(row.repeatTasks / row.tasks) : '—';
+  const labels = {repeat: 'Repeat', once: 'Once', unclassified: 'Unclassified'};
+  const rowHtml = (row, label) => {
+    const mix = postingMix(row);
+    return `<div class="mix-row"><h4>${label} · ${shortDay(row.week)}${row.partial ? ' (partial)' : ''}</h4>
+      <span class="caption">${numeric(row.tasks)} tasks · ${pct(row)} from repeat posters</span>
+      <div class="mix-rail" aria-hidden="true">${Object.keys(labels).map(key => `<i class="mix-${key}" style="width:${row.tasks ? mix[key] / row.tasks * 100 : 0}%"></i>`).join('')}</div>
+      <div class="mix-items">${Object.entries(labels).map(([key, label]) => `<span><i class="mix-${key}" aria-hidden="true"></i>${label} ${numeric(mix[key])}</span>`).join('')}</div></div>`;
+  };
+  const select = $('#posting-week');
+  select.innerHTML = rows.slice().reverse().map(row => `<option value="${row.week}">${row.week}${row.partial ? ' (partial)' : ''}</option>`).join('');
+  select.value = selected.week;
+  const delta = selected.tasks && comparison?.tasks && !selected.partial
+    ? (selected.repeatTasks / selected.tasks - comparison.repeatTasks / comparison.tasks) * 100 : null;
+  const change = delta === null ? '' : ` Repeat share ${Math.abs(delta) < .05 ? 'was unchanged' : `${delta > 0 ? 'rose' : 'fell'} by ${numberWithDecimals.format(Math.round(Math.abs(delta) * 10) / 10)} percentage points`}.`;
+  $('#rotation-content').innerHTML = `<p class="insight">Of ${numeric(selected.tasks)} tasks, <strong>${numeric(selected.repeatTasks)}</strong> came from requesters who posted twice or more that week.${change}${selected.partial ? ' Current week is incomplete.' : ''}</p>
+    <div class="mix-rows">${rowHtml(selected, 'Selected week')}${comparison ? rowHtml(comparison, 'Prior week') : ''}</div>`;
+  const csv = $('#posting-csv');
+  csv.href = 'data:text/csv;charset=utf-8,' + encodeURIComponent(postingCsv(rows));
+  csv.download = `taskmarket-pulse-${net}-weekly.csv`;
+}
+
 function renderPosters(rows) {
   const max = Math.max(1, ...rows.map(row => row.posters));
   const last = rows.at(-2);
@@ -83,6 +122,7 @@ function render() {
   const {posters, feed} = snapshot.networks[net];
   $('#headline').innerHTML = headings.map(([key, label, caption]) => `<article class="panel metric"><span>${label}</span><strong>${numeric(snapshot.headline[net][key])}</strong><small>${caption}</small></article>`).join('');
   renderTrends();
+  renderRotation();
   renderPosters(posters);
   const breakdown = snapshot.breakdown.shared ?? snapshot.breakdown.byNetwork[net];
   $('#modes').innerHTML = bars(breakdown.mode);
@@ -101,8 +141,10 @@ async function refresh() {
     if (!response.ok) throw new Error('Snapshot unavailable');
     const next = await response.json();
     if (snapshot?.asOf !== next.asOf) {
+      const first = !snapshot;
       snapshot = next;
       render();
+      if (first && initialView) requestAnimationFrame(() => document.getElementById(initialView).scrollIntoView());
     }
     $('#as-of').textContent = `Data as of ${fullTime(snapshot.asOf)}`;
     $('#dashboard').hidden = false;
@@ -128,7 +170,14 @@ document.querySelectorAll('[data-range]').forEach(button => button.addEventListe
   updateLink();
   if (snapshot) renderTrends();
 }));
+$('#posting-week').addEventListener('change', event => {
+  week = event.target.value;
+  updateLink();
+  renderRotation();
+  $('#posting-week').focus();
+});
 setControls('[data-net]', 'net', net);
 setControls('[data-range]', 'range', range);
+updateLink();
 refresh();
 setInterval(refresh, 60_000);

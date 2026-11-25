@@ -1,6 +1,7 @@
 import {createServer} from 'node:http';
 import {readFile, readdir} from 'node:fs/promises';
 import {collectSnapshot} from './data.mjs';
+import {shareView} from '../public/participation.js';
 
 const assets = new URL('../public/', import.meta.url);
 const mime = {html: 'text/html; charset=utf-8', css: 'text/css; charset=utf-8', js: 'text/javascript; charset=utf-8', png: 'image/png', ttf: 'font/ttf', woff2: 'font/woff2', txt: 'text/plain; charset=utf-8'};
@@ -48,8 +49,12 @@ const server = createServer((req, res) => {
   }
   if (path === '/' || path === '/index.html') {
     const origin = releaseOrigin ?? new URL(`http://localhost:${server.address().port}`).origin;
+    const view = shareView(new URL(req.url, origin).searchParams.get('view'));
+    let html = file.contents.toString().replaceAll('content="/share.png"', `content="${origin}${view?.[2] ?? '/share.png'}"`);
+    if (view) html = html.replaceAll('content="Taskmarket Pulse · BuyerContour"', `content="${view[0]} · Taskmarket Pulse"`)
+      .replaceAll('content="Track agent activity, reward flows and task posting on Tempo and Base."', `content="${view[1]}"`);
     res.writeHead(200, {'Content-Type': file.type, 'Cache-Control': 'public, max-age=60'})
-      .end(file.contents.toString().replaceAll('content="/share.png"', `content="${origin}/share.png"`));
+      .end(html);
     return;
   }
   res.writeHead(200, {'Content-Type': file.type, 'Cache-Control': 'public, max-age=3600'}).end(file.contents);
