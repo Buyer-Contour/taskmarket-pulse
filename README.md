@@ -6,6 +6,11 @@ A read-only Taskmarket dashboard by BuyerContour. Explore Tempo (4217) and Base 
 
 The [weekly demand mix](https://svc-mwvp1gd19orapjou.buildwithlocus.com/?view=participation#participation) compares a selected UTC week with the preceding week and offers a per-chain CSV of the underlying counts. The share links preserve the chain, date range, and selected week where relevant. Trends, participation and activity have their own social preview images; regenerate those PNGs with `python3 scripts/share-cards.py` if the section names change (requires Pillow).
 
+- [Demand handoff](https://svc-mwvp1gd19orapjou.buildwithlocus.com/?view=handoff#handoff) separates task volume from returning requester participation: both have exact denominators. It matches adjacent UTC weeks on one chain without publishing addresses.
+- [Reward cadence](https://svc-mwvp1gd19orapjou.buildwithlocus.com/?view=cadence#cadence) labels the last 14 completed UTC dates by offer/payment activity. Missing dates are not zeros. A payment on a day with no offers is not evidence of how long a task took.
+
+Both signature views link to downloadable 1200×630 PNGs rendered server-side from the latest complete snapshot, with the data scope, counts, and snapshot time printed on the image. The timestamp in the image URL helps refresh social caches; that URL is not a historical archive.
+
 ## Run locally
 
 Node.js 22+ and npm are required. No upstream key or Cloudflare account is needed for local development.
@@ -36,7 +41,9 @@ npm ci && npm run deploy
 
 Wrangler provisions the KV namespace automatically and may write its account-specific ID to `wrangler.toml`; leave that generated ID out of the portable public repo. The site gets its own public HTTPS Workers URL. Wait for the first scheduled snapshot and verify both network views, refresh and cache headers, the social card, and the under-three-second phone load on the **hosted URL** before submission. Keep the worker, cron, and KV namespace running for at least 30 days after payout.
 
-The live dashboard runs on Build with Locus. Configure a [Locus project and service for Git deployment](https://buildwithlocus.com/git-deploy.md) with a Dockerfile build, port 8080, the `/healthz` health check, and one always-running instance. With the authenticated deployment remote saved as `locus` (without embedding a credential in its URL), deploy with `git push locus HEAD:main`. The Node server refreshes on startup and every five minutes, keeps the last complete snapshot in memory, and needs no external storage or paid addons.
+The live dashboard runs on Build with Locus. Configure a [Locus project and service for Git deployment](https://buildwithlocus.com/git-deploy.md) with a Dockerfile build, port 8080, the `/healthz` health check, and one always-running instance. With the authenticated deployment remote saved as `locus` (without embedding a credential in its URL), deploy with `git push locus HEAD:main`. The Node server refreshes on startup and every five minutes. Failed requests never replace the last complete snapshot. `PULSE_CHECKPOINT` optionally points to a writable local file (set to `/tmp/pulse-last-good.json` in the container), so restarts with the same filesystem can reuse it. A replacement container without that file has to fetch a fresh snapshot.
+
+`/healthz` is uncached, returns 503 while warming up, and reports the snapshot time and age in seconds. A usable last-good or stale snapshot still returns 200 so it stays available; stale means at least one hour old. Node also reports a refresh failure as `last-good` even before the snapshot reaches that age. The dashboard always displays the snapshot time and warns on degraded data.
 
 To run the container locally, use `docker build -t taskmarket-pulse . && docker run --rm -p 8080:8080 taskmarket-pulse`.
 

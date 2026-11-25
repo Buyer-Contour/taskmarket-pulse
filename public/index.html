@@ -42,6 +42,24 @@
       <noscript><p class="notice">Enable JavaScript to explore this dashboard. The methods and data sources are listed below.</p></noscript>
       <div id="dashboard" hidden>
         <section id="headline" class="cards" aria-label="Headline numbers"></section>
+        <nav class="view-actions signal-nav" aria-label="Signature views">
+          <a class="view-link" data-view="handoff" href="?view=handoff#handoff">Demand handoff ↓</a>
+          <a class="view-link" data-view="cadence" href="?view=cadence#cadence">Reward cadence ↓</a>
+        </nav>
+        <section class="section panel rotation" id="handoff" aria-labelledby="handoff-title">
+          <div class="posters-title"><div><span class="eyebrow">SIGNATURE VIEW / 01</span><h2 id="handoff-title">Demand handoff</h2></div>
+            <label for="handoff-week">UTC week <select id="handoff-week"></select></label>
+          </div>
+          <p>How much of this week’s work came from requesters active the week before?</p>
+          <div id="handoff-content" aria-live="polite"></div>
+          <div class="view-actions"><a class="view-link" data-view="handoff" href="?view=handoff#handoff">Share this view ↗</a><a class="view-link" id="handoff-card" download="taskmarket-demand-handoff.png">Download data card (PNG)</a></div>
+        </section>
+        <section class="section panel signal-panel" id="cadence" aria-labelledby="cadence-title">
+          <div class="eyebrow">SIGNATURE VIEW / 02</div><h2 id="cadence-title">Reward cadence</h2>
+          <p>See when the market offers work and when it pays. Same-day activity does not link an offer to a payment.</p>
+          <div id="cadence-content" aria-live="polite"></div>
+          <div class="view-actions"><a class="view-link" data-view="cadence" href="?view=cadence#cadence">Share this view ↗</a><a class="view-link" id="cadence-card" download="taskmarket-reward-cadence.png">Download data card (PNG)</a></div>
+        </section>
         <section class="section" id="trends" aria-labelledby="trends-title">
           <div class="section-head">
             <div><div class="eyebrow">01 · FLOW</div><h2 id="trends-title">Market trends</h2><p id="series-scope"></p></div>
@@ -83,6 +101,8 @@
           <li><code>/api/stats/activity-heatmap</code> — trailing 30 days, <code>hourOfWeek</code>, UTC. Cells show activity counts.</li>
           <li><code>/api/stats/activity-feed</code> — the API returns both chains; filter by each event’s actual <code>chainId</code>. Up to six pages of 50 events are read; up to twelve per chain are shown with shortened public task IDs.</li>
           <li><code>/api/tasks</code> — newest first, 100 per page, all statuses. Follow cursors until the start of the oldest displayed week or the end of the list. Dedupe by task ID and count distinct case-folded requester addresses per Monday-starting UTC week. Demand mix groups tasks by whether their requester posted once or multiple times that week; tasks with no valid requester are shown separately. The denominator is every task in the week. This measures posting frequency, not whether a requester is new to the market. No addresses or identities are displayed. An incomplete scan is never published.</li>
+          <li>Demand handoff matches requesters against the immediately preceding UTC week on the same chain. The task denominator includes every task posted in the selected week; the requester denominator includes only valid addresses active the preceding week. An address absent in the preceding week may have posted earlier. A partial week is not comparable to a completed one.</li>
+          <li>Reward cadence uses the 14 completed UTC days before the snapshot date. Positive offer/paid totals classify each date; a missing API bucket is not zero. The paid-only share is among dates with a positive paid total. It is not a payout rate or a time-to-payment estimate.</li>
         </ul>
         <p>Source: <a href="https://api.taskmarket.dev/">api.taskmarket.dev</a>. Server refreshes every 5 minutes on Locus or every 15 minutes on Cloudflare; cached for at least 60 seconds. Failed refreshes retain the last complete snapshot.</p>
       </details>

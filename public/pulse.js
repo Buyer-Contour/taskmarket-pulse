@@ -1,4 +1,5 @@
 import {postingCsv, postingMix, shareView} from './participation.js';
+import {cadence, cadenceLabels, handoff} from './signals.js';
 
 const $ = selector => document.querySelector(selector);
 const format = new Intl.NumberFormat('en');
@@ -21,6 +22,7 @@ const initial = new URLSearchParams(location.search);
 let snapshot, net = initial.get('net') === 'base' ? 'base' : 'tempo';
 let range = ['7', '90', 'all'].includes(initial.get('range')) ? initial.get('range') : '30';
 let week = initial.get('week');
+let handoffWeek = initial.get('view') === 'handoff' ? week : null;
 const initialView = shareView(initial.get('view')) ? initial.get('view') : null;
 
 function setControls(selector, key, value) {
@@ -31,14 +33,58 @@ function updateLink() {
   const url = new URL(location.href);
   url.searchParams.set('net', net);
   url.searchParams.set('range', range);
-  if (week) url.searchParams.set('week', week);
+  const selectedWeek = initialView === 'handoff' ? handoffWeek : week;
+  if (selectedWeek) url.searchParams.set('week', selectedWeek);
   history.replaceState(null, '', url);
   document.querySelectorAll('[data-view]').forEach(link => {
     const view = link.dataset.view;
     const params = new URLSearchParams({net, range, view});
     if (view === 'participation' && week) params.set('week', week);
+    if (view === 'handoff' && handoffWeek) params.set('week', handoffWeek);
     link.href = `?${params}#${view}`;
   });
+}
+
+const mixLabel = {returning: 'Active prior week', absent: 'Absent prior week', unknown: 'Unknown requester'};
+const percentage = new Intl.NumberFormat('en', {style: 'percent', maximumFractionDigits: 1});
+
+function setCard(view, selectedWeek) {
+  const params = new URLSearchParams({view, net, rev: snapshot.asOf});
+  if (selectedWeek) params.set('week', selectedWeek);
+  const link = $(`#${view}-card`);
+  link.href = '/share-signal.png?' + params;
+  link.hidden = false;
+}
+
+function renderHandoff() {
+  const row = handoff(snapshot, net, handoffWeek);
+  const select = $('#handoff-week');
+  select.disabled = !row;
+  if (!row) {
+    $('#handoff-card').hidden = true;
+    $('#handoff-content').textContent = 'Waiting for a snapshot with adjacent-week counts.';
+    return;
+  }
+  select.innerHTML = snapshot.networks[net].handoffs.slice().reverse().map(({week, partial}) => `<option value="${week}">${week}${partial ? ' (partial)' : ''}</option>`).join('');
+  select.value = row.week;
+  const groups = {returning: row.returningTasks, absent: row.absentLastWeekTasks, unknown: row.unknown};
+  $('#handoff-content').innerHTML = `<div class="signal-kpis">
+    <div><strong>${row.tasks ? percentage.format(row.returningTasks / row.tasks) : '—'}</strong><span>${numeric(row.returningTasks)} of ${numeric(row.tasks)} tasks from prior-week requesters</span></div>
+    <div><strong>${row.priorPosters ? percentage.format(row.returningPosters / row.priorPosters) : '—'}</strong><span>${numeric(row.returningPosters)} of ${numeric(row.priorPosters)} prior-week requesters posted again</span></div>
+    </div><div class="mix-rail" aria-hidden="true">${Object.entries(groups).map(([key, n]) => `<i class="signal-${key}" style="width:${row.tasks ? n / row.tasks * 100 : 0}%"></i>`).join('')}</div>
+    <div class="mix-items">${Object.entries(groups).map(([key, n]) => `<span><i class="signal-${key}" aria-hidden="true"></i>${mixLabel[key]}: ${numeric(n)}</span>`).join('')}</div>
+    <p class="caption">Weeks starting ${row.priorWeek} → ${row.week} UTC. ${row.partial ? 'Selected week is incomplete. ' : ''}Absent last week does not mean new to Taskmarket.</p>`;
+  setCard('handoff', row.week);
+}
+
+function renderCadence() {
+  const {days, counts, shared, paidDays} = cadence(snapshot, net);
+  $('#cadence-content').innerHTML = `<div class="signal-kpis"><div><strong>${counts.paid} / ${paidDays}</strong>
+    <span>${paidDays ? 'payment days without same-day offers' : 'no payment days reported'}</span></div></div>
+    <p class="caption">${days[0].day} → ${days.at(-1).day} UTC · ${shared ? 'Shared Tempo + Base API series' : net === 'base' ? 'Base' : 'Tempo'}</p>
+    <ul class="cadence-days">${days.map(({day, state}) => `<li class="signal-${state}" title="${day}: ${cadenceLabels[state]}"><span aria-hidden="true">${day.slice(-2)}</span><span class="cadence-label">${day}: ${cadenceLabels[state]}</span></li>`).join('')}</ul>
+    <div class="mix-items">${Object.entries(cadenceLabels).map(([key, label]) => `<span><i class="signal-${key}" aria-hidden="true"></i>${label}: ${counts[key]}</span>`).join('')}</div>`;
+  setCard('cadence');
 }
 
 function plot(rows, key, name, unit) {
@@ -121,6 +167,8 @@ function renderHeat(grid) {
 function render() {
   const {posters, feed} = snapshot.networks[net];
   $('#headline').innerHTML = headings.map(([key, label, caption]) => `<article class="panel metric"><span>${label}</span><strong>${numeric(snapshot.headline[net][key])}</strong><small>${caption}</small></article>`).join('');
+  renderHandoff();
+  renderCadence();
   renderTrends();
   renderRotation();
   renderPosters(posters);
@@ -148,9 +196,12 @@ async function refresh() {
     }
     $('#as-of').textContent = `Data as of ${fullTime(snapshot.asOf)}`;
     $('#dashboard').hidden = false;
-    const stale = Date.now() - Date.parse(snapshot.asOf) > 3_600_000;
-    $('#notice').textContent = stale ? 'This snapshot is over an hour old. Showing the last successful refresh.' : '';
-    $('#notice').hidden = !stale;
+    const age = Math.max(0, Math.floor((Date.now() - Date.parse(snapshot.asOf)) / 60_000));
+    const lastGood = response.headers.get('X-Pulse-Status') === 'last-good';
+    $('#as-of').textContent += age ? ` · ${age} min ago` : ' · just now';
+    $('#notice').textContent = age >= 60 ? 'This snapshot is at least an hour old. Showing the last successful refresh.'
+      : lastGood ? 'Refresh has not succeeded yet. Showing the last complete snapshot.' : '';
+    $('#notice').hidden = !$('#notice').textContent;
   } catch {
     $('#as-of').textContent = snapshot ? `Data as of ${fullTime(snapshot.asOf)}` : 'No snapshot available';
     $('#notice').textContent = snapshot ? 'Could not check for newer data. Showing the last loaded snapshot.' : 'The market snapshot is not available yet. Retrying automatically.';
@@ -175,6 +226,12 @@ $('#posting-week').addEventListener('change', event => {
   updateLink();
   renderRotation();
   $('#posting-week').focus();
+});
+$('#handoff-week').addEventListener('change', event => {
+  handoffWeek = event.target.value;
+  updateLink();
+  renderHandoff();
+  $('#handoff-week').focus();
 });
 setControls('[data-net]', 'net', net);
 setControls('[data-range]', 'range', range);

@@ -61,7 +61,7 @@ function readHeat(payload) {
   return grid;
 }
 
-export function posterWeeks(rows, now) {
+function postingWeeks(rows, now) {
   const start = monday(now) - 12 * WEEK;
   const buckets = Array.from({length: 13}, (_, i) => ({week: day(start + i * WEEK), repeats: new Map(), tasks: 0}));
   const seen = new Set();
@@ -76,10 +76,26 @@ export function posterWeeks(rows, now) {
       bucket.repeats.set(key, (bucket.repeats.get(key) ?? 0) + 1);
     }
   }
-  return buckets.map(({week, repeats, tasks}, index) => {
+  const posters = buckets.map(({week, repeats, tasks}, index) => {
     const repeat = [...repeats.values()].filter(n => n > 1);
     return {week, tasks, posters: repeats.size, repeat: repeat.length, repeatTasks: repeat.reduce((sum, n) => sum + n, 0), partial: index === 12};
   });
+  const handoffs = buckets.slice(1).map(({week, repeats, tasks}, index) => {
+    const prior = buckets[index];
+    const returning = [...repeats].filter(([requester]) => prior.repeats.has(requester));
+    const returningTasks = returning.reduce((sum, [, n]) => sum + n, 0);
+    return {
+      week, priorWeek: prior.week, partial: posters[index + 1].partial, tasks,
+      priorPosters: prior.repeats.size, returningPosters: returning.length,
+      returningTasks,
+      absentLastWeekTasks: [...repeats.values()].reduce((sum, n) => sum + n, 0) - returningTasks,
+    };
+  });
+  return {posters, handoffs};
+}
+
+export function posterWeeks(rows, now) {
+  return postingWeeks(rows, now).posters;
 }
 
 async function readPosterWeeks({fetcher, step, network, now}) {
@@ -97,7 +113,7 @@ async function readPosterWeeks({fetcher, step, network, now}) {
       return {rows: items.filter(t => Date.parse(t[1]) >= start), done: body.hasMore === false || (oldest && Date.parse(oldest) < start), next: body.nextCursor};
     });
     rows.push(...page.rows);
-    if (page.done) return step(`${network.id} weekly counts`, () => posterWeeks(rows, now));
+    if (page.done) return step(`${network.id} weekly counts`, () => postingWeeks(rows, now));
     if (!page.next || page.next === cursor) throw new Error('Task list cursor did not advance');
     cursor = page.next;
   }
@@ -141,11 +157,11 @@ export async function collectSnapshot({fetcher = fetch, step = (_name, run) => r
       get('daily series', 'stats/platform-time-series', readSeries, {range: 'all', bucket: 'day'}),
       get('breakdown', 'stats/breakdowns', readBreakdowns),
     ]);
-    const [heat, posters] = await Promise.all([
+    const [heat, posting] = await Promise.all([
       get('heatmap', 'stats/activity-heatmap', readHeat, {range: '30d', dimension: 'hourOfWeek'}),
       readPosterWeeks({fetcher, step, network, now}),
     ]);
-    return [key, {headline, series, breakdown, heat, posters}];
+    return [key, {headline, series, breakdown, heat, ...posting}];
   };
   const networks = Object.fromEntries(await Promise.all(Object.entries(NETWORKS).map(readNetwork)));
   const feed = await readFeed({fetcher, step});
@@ -156,6 +172,6 @@ export async function collectSnapshot({fetcher = fetch, step = (_name, run) => r
     series: compare(field('series')),
     breakdown: compare(field('breakdown')),
     heat: compare(field('heat')),
-    networks: Object.fromEntries(Object.entries(networks).map(([net, data]) => [net, {posters: data.posters, feed: feed[NETWORKS[net].id]}])),
+    networks: Object.fromEntries(Object.entries(networks).map(([net, {posters, handoffs}]) => [net, {posters, handoffs, feed: feed[NETWORKS[net].id]}])),
   };
 }

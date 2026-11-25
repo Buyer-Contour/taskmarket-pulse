@@ -33,7 +33,8 @@ function fixture({badCursor = false} = {}) {
     switch (url.pathname) {
       case '/api/tasks':
         assert.equal(url.searchParams.get('limit'), '100');
-        body = {tasks: [{id: id(cursor ? 2 : 1), requester: cursor ? other : wallet, createdAt: '2026-11-24T00:00:00Z', chainId: chain}], hasMore: !cursor || badCursor, nextCursor: 'next'};
+        body = {tasks: [{id: id(cursor ? 2 : 1), requester: cursor ? other : wallet, createdAt: '2026-11-24T00:00:00Z', chainId: chain},
+          ...(cursor ? [{id: id(3), requester: wallet, createdAt: '2026-11-22T00:00:00Z', chainId: chain}] : [])], hasMore: !cursor || badCursor, nextCursor: 'next'};
         break;
       case '/api/stats/activity-feed':
         assert.equal(url.searchParams.get('limit'), '50');
@@ -69,6 +70,9 @@ test('snapshot keeps both networks, exact reward units, and no requester or acto
   assert.equal(s.heat.shared[5][19], 29);
   for (const [network, chain] of [['tempo', 4217], ['base', 8453]]) {
     assert.equal(s.networks[network].posters.at(-1).posters, 2);
+    assert.deepEqual(s.networks[network].handoffs.at(-1), {
+      week: '2026-11-23', priorWeek: '2026-11-16', partial: true, tasks: 2, priorPosters: 1, returningPosters: 1, returningTasks: 1, absentLastWeekTasks: 1,
+    });
     assert.deepEqual(s.networks[network].feed.map(e => e.chainId), [chain]);
     assert.deepEqual(calls.filter(([path, id]) => path === '/api/tasks' && id === chain).map(call => call[2]), [null, 'next']);
   }

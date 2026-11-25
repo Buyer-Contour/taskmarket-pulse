@@ -2,6 +2,8 @@ const views = {
   trends: ['Market trends', 'See activity, tasks and rewards over time.', '/share-trends.png'],
   participation: ['Who posts work?', 'See how much work comes from repeat requesters on Tempo and Base.', '/share-participation.png'],
   activity: ['Market activity', 'Find the busiest hours and the latest activity on both chains.', '/share-activity.png'],
+  handoff: ['Demand handoff', 'See how much work comes from requesters active the preceding week.', '/share-signal.png'],
+  cadence: ['Reward cadence', 'See which UTC dates recorded reward offers or payments.', '/share-signal.png'],
 };
 
 export function shareView(value) {

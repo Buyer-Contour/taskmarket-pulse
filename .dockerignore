@@ -1,7 +1,11 @@
 *
 !Dockerfile
+!package.json
+!package-lock.json
 !src/
 !src/data.mjs
+!src/health.mjs
 !src/server.mjs
+!src/share.mjs
 !public/
 !public/**
